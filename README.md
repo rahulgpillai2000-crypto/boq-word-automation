@@ -1,43 +1,51 @@
 # boq-word-automation
 
-This script generates a Word business case from Excel even when fields are **not in one table**.
+Excel-to-Word automation that keeps project business case documents fully aligned with a master Excel source.
 
-## Supported Excel layouts
+## What this does
 
-The script reads from `data/master_projects.xlsx` and supports:
+- Reads project/contract records from Excel (`pandas`).
+- Replaces placeholders inside a Word `.docx` template (`python-docx`).
+- Generates one output document per Excel row (or a single selected row).
+- Overwrites generated outputs when re-run, so updates are repeatable and consistent.
 
-1. **Tabular layout** (headers in one row):
-   - `Contract_Number`, `Work_Order_Number`, `Project_Name`, `Date`, `Start_Date`, `End_Date`, `Total_Value`
-2. **Key-value layout** across one or multiple sheets, for example:
-   - `Contract Number` in one cell and its value in the next cell
-   - `Project Name` on another sheet with value next to it
+## 1) Excel master data format
 
-The script automatically searches sheets and common alias labels (e.g., `Contract Number`, `Work Order`, `Start Date`, `Contract Value`).
+Create an Excel sheet with one row per project and clear column headers.
 
-## How to place placeholders in Word (very simple)
+Recommended headers:
 
-Open `templates/business_case_template.docx` and type placeholders exactly where values should appear:
+- `Project_Name`
+- `Contract_Number`
+- `Contract_Value`
+- `Date`
+- `Client_Name`
+- `Engineer_Consultant`
+- `Work_Order_Details`
+- `Financial_Total`
+- `Variation_Total`
 
-- `{{Contract_Number}}`
-- `{{Work_Order_Number}}`
+You can add more columns at any time; each column is automatically available as a Word placeholder key.
+
+## 2) Word business case template format
+
+Use placeholders wrapped in double curly braces anywhere in the document body, tables, headers, or footers.
+
+Example placeholders:
+
 - `{{Project_Name}}`
+- `{{Contract_Number}}`
+- `{{Contract_Value}}`
 - `{{Date}}`
-- `{{Total_Value}}`
-- `{{CASHFLOW_TABLE}}` (this is where the monthly table will be inserted)
+- `{{Client_Name}}`
+- `{{Engineer_Consultant}}`
+- `{{Work_Order_Details}}`
+- `{{Financial_Total}}`
+- `{{Variation_Total}}`
 
-### Example paragraph in Word
+> Keep the template file unchanged and re-run the script whenever Excel data changes.
 
-`This business case is for project {{Project_Name}} under contract {{Contract_Number}}.`
-
-### Example for cashflow location
-
-Add a heading like `Cashflow` and on the next line type only:
-
-`{{CASHFLOW_TABLE}}`
-
-When script runs, that marker is replaced by a generated table.
-
-## Setup
+## 3) Setup
 
 ```bash
 python -m venv .venv
@@ -45,14 +53,38 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run
+## 4) Run automation (one-click)
+
+Generate documents for **all projects**:
 
 ```bash
-python generate_business_cases.py
+python generate_business_cases.py \
+  --excel data/master_projects.xlsx \
+  --sheet 0 \
+  --template templates/business_case_template.docx \
+  --output-dir output
 ```
 
-## Output
+Generate document for **one project only**:
 
-Generated file:
+```bash
+python generate_business_cases.py \
+  --excel data/master_projects.xlsx \
+  --template templates/business_case_template.docx \
+  --output-dir output \
+  --project-id-column Contract_Number \
+  --project-id CN-1002
+```
 
-- `output/output.docx`
+## 5) How consistency is enforced
+
+- Excel is the single source of truth.
+- Word files are regenerated directly from Excel values.
+- No manual typing is needed inside generated Word files.
+- Running the script repeatedly updates outputs with latest Excel values.
+
+## 6) Notes
+
+- Output filenames are based on `Contract_Number` by default (configurable via `--filename-column`).
+- If a placeholder exists in Word but not in Excel headers, the script clears it and prints a warning.
+- Date cells are exported in `YYYY-MM-DD` format.
