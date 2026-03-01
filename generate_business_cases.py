@@ -1,62 +1,133 @@
 import pandas as pd
 from docx import Document
 from math import ceil
-from datetime import datetime
 
-# Load Excel
+# =========================
+# LOAD EXCEL
+# =========================
 df = pd.read_excel("data/master_projects.xlsx")
-
-# Take first row
 data = df.iloc[0]
 
-# Extract values
-start_date = pd.to_datetime(data["Start_Date"])
-end_date = pd.to_datetime(data["End_Date"])
-total_value = float(data["Total_Value"])
+# =========================
+# EXTRACT VALUES
+# =========================
+contract_number = str(data["Contract Number"])
+work_order = str(data["Work Order Number"])
+project_name = str(data["Project Name"])
 
-# Calculate duration
+# Business Case Date
+date_value = pd.to_datetime(data["Date"])
+formatted_date = date_value.strftime("%d %B %Y")
+
+# Project Dates
+start_date = pd.to_datetime(data["Commencement Date"])
+end_date = pd.to_datetime(data["End Date"])
+
+total_value = float(data["Total Value"])
+
+# =========================
+# CASHFLOW (DAY-BASED SMART)
+# =========================
 duration_days = (end_date - start_date).days
-months = ceil(duration_days / 30)
 
-# Monthly value
-monthly_value = total_value / months
+if duration_days <= 0:
+    duration_days = 1
 
-# Load Word
+# Split duration
+full_months = duration_days // 30
+remaining_days = duration_days % 30
+
+months = full_months + (1 if remaining_days > 0 else 0)
+
+values = []
+
+# Value per day
+value_per_day = total_value / duration_days
+
+# Full months (equal)
+full_month_value = round(value_per_day * 30, 2)
+
+for _ in range(full_months):
+    values.append(full_month_value)
+
+# Last partial month (smaller)
+if remaining_days > 0:
+    last_value = round(total_value - sum(values), 2)
+    values.append(last_value)
+
+# Final rounding correction (guarantee exact total)
+if len(values) > 0:
+    values = [round(v, 2) for v in values[:-1]] + [
+        round(total_value - sum(values[:-1]), 2)
+    ]
+
+months = len(values)
+
+# =========================
+# LOAD WORD TEMPLATE
+# =========================
 doc = Document("templates/business_case_template.docx")
 
-# Replace normal placeholders
+# =========================
+# BASE PLACEHOLDERS
+# =========================
 mapping = {
-    "{{Contract_Number}}": str(data["Contract_Number"]),
-    "{{Work_Order_Number}}": str(data["Work_Order_Number"]),
-    "{{Project_Name}}": str(data["Project_Name"]),
-    "{{Date}}": str(data["Date"]),
-    "{{Total_Value}}": f"AED {total_value:,.2f}"
+    "{{Contract_Number}}": contract_number,
+    "{{Work_Order_Number}}": work_order,
+    "{{Project_Name}}": project_name,
+    "{{Total_Value}}": f"AED {total_value:,.2f}",
+    "{{Date}}": formatted_date
 }
 
-for p in doc.paragraphs:
+# =========================
+# MONTH PLACEHOLDERS (M1–M12)
+# =========================
+for i in range(months):
+    mapping[f"{{{{M{i+1}}}}}"] = f"{values[i]:,.2f}"
+
+# Clear unused months
+for i in range(months, 12):
+    mapping[f"{{{{M{i+1}}}}}"] = ""
+
+# =========================
+# REPLACEMENT FUNCTIONS
+# =========================
+def replace_text_in_paragraph(paragraph):
     for key, val in mapping.items():
-        if key in p.text:
-            p.text = p.text.replace(key, val)
+        if key in paragraph.text:
+            paragraph.text = paragraph.text.replace(key, val)
 
-# 🔥 Create Cashflow Table
+
+def replace_text_in_table(table):
+    for row in table.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                replace_text_in_paragraph(paragraph)
+
+
+# =========================
+# APPLY REPLACEMENTS
+# =========================
+
+# Normal text
 for p in doc.paragraphs:
-    if "{{CASHFLOW_TABLE}}" in p.text:
+    replace_text_in_paragraph(p)
 
-        p.text = p.text.replace("{{CASHFLOW_TABLE}}", "")
+# Tables (IMPORTANT)
+for table in doc.tables:
+    replace_text_in_table(table)
 
-        table = doc.add_table(rows=2, cols=months+1)
-
-        # Header row
-        table.cell(0, 0).text = "Roles"
-        for i in range(months):
-            table.cell(0, i+1).text = f"Month {i+1}"
-
-        # Data row
-        table.cell(1, 0).text = "Contractor Fees"
-        for i in range(months):
-            table.cell(1, i+1).text = f"{monthly_value:,.2f}"
-
-# Save
+# =========================
+# SAVE OUTPUT
+# =========================
 doc.save("output/output.docx")
 
-print("✅ Business Case Generated with Dynamic Cashflow!")
+# =========================
+# DEBUG PRINTS
+# =========================
+print("Duration Days:", duration_days)
+print("Months:", months)
+print("Values:", values)
+print("Total:", sum(values))
+
+print("✅ SUCCESS – Business Case Generated with Smart Cashflow")
