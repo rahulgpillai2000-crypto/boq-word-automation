@@ -1,7 +1,7 @@
 import streamlit as st
 from generate_business_cases_ui import generate_document
 
-st.title("🏗️ ADM Business Case Automation Tool")
+st.title("🏗️ A.D.M Business Case Automation Tool")
 
 st.info("Upload your project Excel and Word template to generate a business case automatically.")
 
